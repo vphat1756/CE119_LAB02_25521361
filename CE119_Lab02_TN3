@@ -1,0 +1,130 @@
+# CE119 - LAB 02: THI NGHIEM 3 (TN3) - KIEM TRA NGOAC CAN BANG
+# MSSV: 25521361 (d = 1, k = 4)
+# Chuoi ca nhan P gom k = 4 cap ngoac long nhau: "([{()}])"
+
+.data
+str_P:      .asciiz "([{()}])"
+msg_v0:     .asciiz "v0 = "
+msg_v1:     .asciiz ", v1 = "
+msg_nl:     .asciiz "\n"
+
+.text
+.globl main
+
+
+main:
+    la   $a0, str_P             # Truyen dia chi chuoi vao $a0
+    jal  check_brackets
+    move $s0, $v0               # $s0 = vi tri
+    move $s1, $v1               # $s1 = ma loi
+
+    # In ket qua: v0 = ..., v1 = ...
+    la   $a0, msg_v0
+    li   $v0, 4
+    syscall
+    move $a0, $s0
+    li   $v0, 1
+    syscall
+
+    la   $a0, msg_v1
+    li   $v0, 4
+    syscall
+    move $a0, $s1
+    li   $v0, 1
+    syscall
+
+    la   $a0, msg_nl
+    li   $v0, 4
+    syscall
+
+    # Thoat chuong trinh
+    li   $v0, 10
+    syscall
+
+
+
+check_brackets:
+    move $t9, $sp              # Luu $sp ban dau vao $t9 de dam bao can bang
+    move $t0, $a0              # Con tro duyet chuoi
+    li   $t1, 0                # Vi tri ky tu (1-based index)
+
+cb_loop:
+    lb   $t2, 0($t0)           # Doc ky tu hien tai
+    beq  $t2, $zero, cb_end_str# Gap ky tu ket thuc '\0' -> Xu ly het chuoi
+    addi $t1, $t1, 1           # Vi tri = vi tri + 1
+
+    # 1. Kiem tra ngoac mo: '(', '[', '{' -> PUSH
+    li   $t3, 40               # ASCII '(' = 40
+    beq  $t2, $t3, cb_push
+    li   $t3, 91               # ASCII '[' = 91
+    beq  $t2, $t3, cb_push
+    li   $t3, 123              # ASCII '{' = 123
+    beq  $t2, $t3, cb_push
+
+    # 2. Kiem tra ngoac dong: ')', ']', '}' -> POP va KIEM TRA
+    li   $t3, 41               # ASCII ')' = 41
+    beq  $t2, $t3, cb_check_close
+    li   $t3, 93               # ASCII ']' = 93
+    beq  $t2, $t3, cb_check_close
+    li   $t3, 125              # ASCII '}' = 125
+    beq  $t2, $t3, cb_check_close
+
+    # Ky tu khac (khong phai ngoac) -> Bo qua
+    j    cb_next
+
+cb_push:
+    addi $sp, $sp, -4
+    sw   $t2, 0($sp)           # Push ma ASCII cua ngoac mo vao stack
+    j    cb_next
+
+cb_check_close:
+    # Neu ngan xep rong ($sp == $t9) -> Loi ma 2
+    beq  $sp, $t9, cb_err_empty
+
+    # Pop ngoac mo tai dinh stack vao $t4
+    lw   $t4, 0($sp)
+    addi $sp, $sp, 4
+
+    sub  $t5, $t2, $t4         # $t5 = ASCII(ngoac dong) - ASCII(ngoac mo)
+    li   $t6, 1
+    beq  $t5, $t6, cb_next     # Khop cap ()
+    li   $t6, 2
+    beq  $t5, $t6, cb_next     # Khop cap [] hoac {}
+
+    # Khong khop loai -> Loi ma 1
+    j    cb_err_mismatch
+
+cb_next:
+    addi $t0, $t0, 1           # Sang ky tu tiep theo
+    j    cb_loop
+
+cb_end_str:
+    # Het chuoi: neu ngan xep con phan tu ($sp != $t9) -> Loi ma 3
+    bne  $sp, $t9, cb_err_unclosed
+
+    # Chuoi hop le
+    li   $v0, 0
+    li   $v1, 0
+    move $sp, $t9              # Khoi phuc can bang stack
+    jr   $ra
+
+cb_err_mismatch:
+    # Loi 1: Ngoac dong khong cung loai voi ngoac mo
+    move $v0, $t1              # Vi tri loi
+    li   $v1, 1                # Ma loi 1
+    move $sp, $t9              # Khoi phuc can bang stack
+    jr   $ra
+
+cb_err_empty:
+    # Loi 2: Ngoac dong khi ngan xep rong
+    move $v0, $t1              # Vi tri loi
+    li   $v1, 2                # Ma loi 2
+    move $sp, $t9              # Khoi phuc can bang stack
+    jr   $ra
+
+cb_err_unclosed:
+    # Loi 3: Het chuoi nhung ngan xep con ngoac mo
+    addi $v0, $t1, 1           # Vi tri = do dai chuoi + 1
+    li   $v1, 3                # Ma loi 3
+    move $sp, $t9              # Khoi phuc can bang stack
+    jr   $ra

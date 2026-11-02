@@ -1,0 +1,354 @@
+
+# LAB 02: MANG, CHUOI, THU TUC VA NGAN XEP
+# MSSV: 25521361 (d = 1, k = 4)
+
+
+.data
+scores:     .word 7, 4, 9, 10, 3, 6, 8, 3, 7, 10, 5, 4
+n_scores:   .word 12
+
+# Bang tra nhom diem: 0-3 -> 0; 4-6 -> 1; 7-8 -> 2; 9-10 -> 3 (11 byte)
+grade_tab:  .byte 0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3
+
+# Mang dem so luong sinh vien trong 4 nhom (khoi tao 4 word = 0)
+hist:       .word 0, 0, 0, 0
+n_groups:   .word 4
+
+# Chuoi dinh dang xuat TN2
+str_tn2_hdr: .asciiz "=== KET QUA TN2: THONG KE DIEM ===\n"
+str_min:     .asciiz "min="
+str_max:     .asciiz " max="
+str_g0:      .asciiz "\ng0="
+str_g1:      .asciiz " g1="
+str_g2:      .asciiz " g2="
+str_g3:      .asciiz " g3="
+str_nl:      .asciiz "\n"
+
+# PHAN DU LIEU KIEM TRA NGOAC (TN3)
+
+str_tn3_hdr: .asciiz "\n=== KET QUA TN3: KIEM TRA NGOAC ===\n"
+str_P:       .asciiz "([{()}])"
+str_v0:      .asciiz "v0 = "
+str_v1:      .asciiz ", v1 = "
+
+# PHAN DU LIEU MO RONG: VE PHO DIEM
+
+str_ext_hdr: .asciiz "\n=== KET QUA MO RONG: BIEU DO PHO DIEM ===\n"
+str_g_lbl:   .asciiz "g"
+str_colon:   .asciiz ": "
+str_bar:     .asciiz "|"
+
+.text
+.globl main
+
+main:
+
+    la   $a0, str_tn2_hdr
+    li   $v0, 4
+    syscall
+
+    # Goi stats(scores, 12)
+    la   $a0, scores
+    lw   $a1, n_scores
+    jal  stats
+    move $s0, $v0              # $s0 = min
+    move $s1, $v1              # $s1 = max
+
+    # Goi histogram(scores, 12, grade_tab, hist)
+    la   $a0, scores
+    lw   $a1, n_scores
+    la   $a2, grade_tab
+    la   $a3, hist
+    jal  histogram
+
+    # In ket qua dong 1: min=<giatri> max=<giatri>
+    la   $a0, str_min
+    li   $v0, 4
+    syscall
+    move $a0, $s0
+    li   $v0, 1
+    syscall
+
+    la   $a0, str_max
+    li   $v0, 4
+    syscall
+    move $a0, $s1
+    li   $v0, 1
+    syscall
+
+    # In ket qua dong 2: g0=<so> g1=<so> g2=<so> g3=<so>
+    la   $a0, str_g0
+    li   $v0, 4
+    syscall
+    la   $t0, hist
+    lw   $a0, 0($t0)
+    li   $v0, 1
+    syscall
+
+    la   $a0, str_g1
+    li   $v0, 4
+    syscall
+    lw   $a0, 4($t0)
+    li   $v0, 1
+    syscall
+
+    la   $a0, str_g2
+    li   $v0, 4
+    syscall
+    lw   $a0, 8($t0)
+    li   $v0, 1
+    syscall
+
+    la   $a0, str_g3
+    li   $v0, 4
+    syscall
+    lw   $a0, 12($t0)
+    li   $v0, 1
+    syscall
+
+    la   $a0, str_nl
+    li   $v0, 4
+    syscall
+
+    # -------------------------------------------------------------------------
+    # 2. THUC THI PHAN MO RONG (DRAW_HIST)
+    # -------------------------------------------------------------------------
+    la   $a0, str_ext_hdr
+    li   $v0, 4
+    syscall
+
+    la   $a0, hist
+    lw   $a1, n_groups
+    jal  draw_hist
+
+ 
+    la   $a0, str_tn3_hdr
+    li   $v0, 4
+    syscall
+
+    la   $a0, str_P
+    jal  check_brackets
+    move $s2, $v0              # $s2 = vi tri loi
+    move $s3, $v1              # $s3 = ma loi
+
+    # In ket qua kiem tra ngoac: v0 = ..., v1 = ...
+    la   $a0, str_v0
+    li   $v0, 4
+    syscall
+    move $a0, $s2
+    li   $v0, 1
+    syscall
+
+    la   $a0, str_v1
+    li   $v0, 4
+    syscall
+    move $a0, $s3
+    li   $v0, 1
+    syscall
+
+    la   $a0, str_nl
+    li   $v0, 4
+    syscall
+
+  
+    li   $v0, 10
+    syscall
+
+
+
+stats:
+    lw   $v0, 0($a0)           # Khoi tao min = arr[0]
+    lw   $v1, 0($a0)           # Khoi tao max = arr[0]
+    addi $t0, $a0, 4           # Con tro duyet tu arr[1]
+    addi $t1, $a1, -1          # So phan tu con lai = n - 1
+
+stats_loop:
+    beq  $t1, $zero, stats_done
+    lw   $t2, 0($t0)           # Doc phan tu arr[i]
+
+    # Kiem tra min: neu arr[i] < min thi min = arr[i]
+    slt  $t3, $t2, $v0
+    beq  $t3, $zero, stats_check_max
+    move $v0, $t2
+
+stats_check_max:
+    # Kiem tra max: neu max < arr[i] thi max = arr[i]
+    slt  $t3, $v1, $t2
+    beq  $t3, $zero, stats_next
+    move $v1, $t2
+
+stats_next:
+    addi $t0, $t0, 4           # Chuyen sang word tiep theo
+    addi $t1, $t1, -1          # Giam bo dem
+    j    stats_loop
+
+stats_done:
+    jr   $ra
+
+
+
+histogram:
+    move $t0, $a0              # Con tro duyet mang diem
+    move $t1, $a1              # So phan tu n
+
+hist_loop:
+    beq  $t1, $zero, hist_done
+    lw   $t2, 0($t0)           # $t2 = diem so s (word)
+
+    # Tra bang: group_id = grade_tab[s]
+    add  $t3, $a2, $t2         # Dia chi byte: grade_tab + s
+    lbu  $t4, 0($t3)           # $t4 = group_id (0, 1, 2, hoac 3)
+
+    # Tang hist[group_id] them 1
+    sll  $t5, $t4, 2           # Offset byte = group_id * 4
+    add  $t6, $a3, $t5         # Dia chi hist[group_id]
+    lw   $t7, 0($t6)
+    addi $t7, $t7, 1           # Tang dem
+    sw   $t7, 0($t6)           # Ghi lai vao mang hist
+
+    addi $t0, $t0, 4           # Sang word diem tiep theo
+    addi $t1, $t1, -1          # Giam bo dem
+    j    hist_loop
+
+hist_done:
+    jr   $ra
+
+
+
+draw_hist:
+    move $t0, $a0              # Con tro mang hist
+    move $t1, $a1              # So luong nhom (4)
+    li   $t2, 0                # Chi so nhom i (0, 1, 2, 3)
+
+dh_group_loop:
+    beq  $t2, $t1, dh_done     # Da in du 4 nhom -> Ket thuc
+
+    # In "g"
+    la   $a0, str_g_lbl
+    li   $v0, 4
+    syscall
+
+    # In chi so nhom i
+    move $a0, $t2
+    li   $v0, 1
+    syscall
+
+    # In ": "
+    la   $a0, str_colon
+    li   $v0, 4
+    syscall
+
+    # Doc so sinh vien cua nhom: count = hist[i]
+    lw   $t3, 0($t0)
+
+dh_bar_loop:
+    beq  $t3, $zero, dh_next_group
+    # In ky tu '|'
+    la   $a0, str_bar
+    li   $v0, 4
+    syscall
+    addi $t3, $t3, -1
+    j    dh_bar_loop
+
+dh_next_group:
+    # In xuong dong
+    la   $a0, str_nl
+    li   $v0, 4
+    syscall
+
+    addi $t0, $t0, 4           # Sang phan tu tiep theo trong hist
+    addi $t2, $t2, 1           # i++
+    j    dh_group_loop
+
+dh_done:
+    jr   $ra
+
+check_brackets:
+    move $t9, $sp              # Luu $sp ban dau vao $t9 de dam bao can bang
+    move $t0, $a0              # Con tro duyet chuoi ky tu
+    li   $t1, 0                # Vi tri ky tu (1-based index)
+
+cb_loop:
+    lb   $t2, 0($t0)           # Doc ky tu hien tai
+    beq  $t2, $zero, cb_end_str# Gap byte ket thuc '\0' -> Xu ly het chuoi
+    addi $t1, $t1, 1           # Vi tri = vi tri + 1
+
+    # 1. Kiem tra ngoac mo: '(', '[', '{' -> PUSH
+    li   $t3, 40               # ASCII '(' = 40
+    beq  $t2, $t3, cb_push
+    li   $t3, 91               # ASCII '[' = 91
+    beq  $t2, $t3, cb_push
+    li   $t3, 123              # ASCII '{' = 123
+    beq  $t2, $t3, cb_push
+
+    # 2. Kiem tra ngoac dong: ')', ']', '}' -> POP va KIEM TRA
+    li   $t3, 41               # ASCII ')' = 41
+    beq  $t2, $t3, cb_check_close
+    li   $t3, 93               # ASCII ']' = 93
+    beq  $t2, $t3, cb_check_close
+    li   $t3, 125              # ASCII '}' = 125
+    beq  $t2, $t3, cb_check_close
+
+    # Ky tu binh thuong (khong phai ngoac) -> Bo qua
+    j    cb_next
+
+cb_push:
+    addi $sp, $sp, -4
+    sw   $t2, 0($sp)           # Day ky tu ngoac mo vao stack
+    j    cb_next
+
+cb_check_close:
+    # Kiem tra ngan xep rong: neu $sp == $t9 thi bao loi ma 2
+    beq  $sp, $t9, cb_err_empty
+
+    # Lay ngoac mo o dinh ngan xep vao $t4
+    lw   $t4, 0($sp)
+    addi $sp, $sp, 4
+
+    # Kiem tra tinh tuong thich ngoac:
+    # ')' (41) - '(' (40) = 1
+    # ']' (93) - '[' (91) = 2
+    # '}' (125) - '{' (123) = 2
+    sub  $t5, $t2, $t4         # Hieu ma ASCII
+    li   $t6, 1
+    beq  $t5, $t6, cb_next     # Khop cap ()
+    li   $t6, 2
+    beq  $t5, $t6, cb_next     # Khop cap [] hoac {}
+
+    # Neu khong khop loai -> Loi ma 1
+    j    cb_err_mismatch
+
+cb_next:
+    addi $t0, $t0, 1           # Tro sang ky tu tiep theo trong chuoi
+    j    cb_loop
+
+cb_end_str:
+    # Het chuoi: neu ngan xep con ngoac mo ($sp != $t9) -> Loi ma 3
+    bne  $sp, $t9, cb_err_unclosed
+
+    # Chuoi hoan toan hop le
+    li   $v0, 0
+    li   $v1, 0
+    move $sp, $t9              # Bao dam can bang ngan xep
+    jr   $ra
+
+cb_err_mismatch:
+    # Loi ma 1: Ngoac dong khong cung loai
+    move $v0, $t1              # Vi tri ky tu sai
+    li   $v1, 1                # Ma loi 1
+    move $sp, $t9              # Khoi phuc can bang ngan xep
+    jr   $ra
+
+cb_err_empty:
+    # Loi ma 2: Ngoac dong khi ngan xep dang rong
+    move $v0, $t1              # Vi tri ky tu sai
+    li   $v1, 2                # Ma loi 2
+    move $sp, $t9              # Khoi phuc can bang ngan xep
+    jr   $ra
+
+cb_err_unclosed:
+    # Loi ma 3: Het chuoi nhung van con ngoac mo chua dong
+    addi $v0, $t1, 1           # Vi tri = do dai chuoi + 1
+    li   $v1, 3                # Ma loi 3
+    move $sp, $t9              # Khoi phuc can bang ngan xep
+    jr   $ra
